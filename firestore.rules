@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Global Safety Net
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.token.email_verified == true && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == "contact@sahaza.mg" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)
+      );
+    }
+
+    function isValidId(id) {
+       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // User Profiles & Credits
+    match /users/{userId} {
+      // Identity check: Users can always read their own profile if verified
+      // Admin can read any profile
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      
+      // User can create their own profile
+      // Admin is allowed to be initialized as admin if email matches
+      allow create: if isOwner(userId) && 
+        isValidId(userId) &&
+        request.auth.token.email_verified == true &&
+        incoming().credits == 0 && 
+        incoming().hasUsedFreeSearch == false &&
+        incoming().email == request.auth.token.email &&
+        incoming().updatedAt == request.time &&
+        (
+          (request.auth.token.email == "contact@sahaza.mg" && incoming().isAdmin == true) ||
+          (request.auth.token.email != "contact@sahaza.mg" && incoming().isAdmin == false)
+        ) &&
+        incoming().keys().hasAll(['credits', 'isAdmin', 'hasUsedFreeSearch', 'email', 'updatedAt']) &&
+        incoming().keys().size() == 5;
+
+      // Only admins or the owner (for specific fields) can update
+      allow update: if isValidId(userId) && (
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['credits', 'isAdmin', 'hasUsedFreeSearch', 'updatedAt']) && incoming().updatedAt == request.time) || 
+        (isOwner(userId) && (
+          // Action: Use free search
+          (existing().hasUsedFreeSearch == false && incoming().hasUsedFreeSearch == true && incoming().diff(existing()).affectedKeys().hasOnly(['hasUsedFreeSearch', 'updatedAt']) && incoming().updatedAt == request.time) ||
+          // Action: Spend credits (must be decreasing)
+          (incoming().credits < existing().credits && incoming().diff(existing()).affectedKeys().hasOnly(['credits', 'updatedAt']) && incoming().updatedAt == request.time)
+        ))
+      );
+      
+      // Saved Websites for users
+      match /websites/{businessId} {
+        allow read: if isValidId(businessId) && (isOwner(userId) || isAdmin());
+        allow create: if isOwner(userId) && isValidId(businessId) && request.auth.token.email_verified == true;
+        allow update: if isOwner(userId) && isValidId(businessId) && request.auth.token.email_verified == true;
+        allow delete: if isOwner(userId) && isValidId(businessId);
+      }
+    }
+
+    // Transactions log
+    match /transactions/{txnId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Users can create their own transaction records as proof of action
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidId(txnId);
+      allow update, delete: if isAdmin();
+    }
+  }
+}

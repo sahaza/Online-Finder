@@ -1,0 +1,5 @@
+{
+  "name": "OfflineFinder - High-Impact Local Lead Generation",
+  "description": "The ultimate toolkit for finding local businesses with zero online presence. Audit invisible businesses, generate AI sales pitches, and close more clients.",
+  "requestFramePermissions": ["geolocation"]
+}

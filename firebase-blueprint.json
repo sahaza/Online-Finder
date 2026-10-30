@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "Website": {
+      "title": "Website",
+      "description": "A generated website for a business.",
+      "type": "object",
+      "properties": {
+        "html": {
+          "type": "string",
+          "description": "The HTML code of the website."
+        },
+        "businessId": {
+          "type": "string",
+          "description": "The ID of the business."
+        },
+        "businessName": {
+          "type": "string",
+          "description": "The name of the business."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who saved the website."
+        },
+        "customTitle": {
+          "type": "string",
+          "description": "A custom title for the website."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The last time the website was updated."
+        }
+      },
+      "required": ["html", "businessId", "userId", "updatedAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Premium user data including credits.",
+      "type": "object",
+      "properties": {
+        "credits": { "type": "number" },
+        "hasUsedFreeSearch": { "type": "boolean" },
+        "isAdmin": { "type": "boolean" },
+        "email": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["credits", "hasUsedFreeSearch", "email"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Credit history record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["search", "purchase", "admin_add"] },
+        "description": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "type", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Root user document for profile and credits."
+    },
+    "/users/{userId}/websites/{businessId}": {
+      "schema": "Website",
+      "description": "User's saved websites for specific businesses."
+    },
+    "/transactions/{txnId}": {
+      "schema": "Transaction",
+      "description": "Public (for admins) and private transaction logs."
+    }
+  }
+}
